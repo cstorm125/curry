@@ -1,0 +1,417 @@
+---
+title: "Curry Codebook"
+author: "Charin Polpanumas"
+date: "May 19, 2559 BE"
+output:
+  html_document:
+    toc: true
+---
+
+#Executive Summary
+The ```curry dataset```  contains 693 observations of prostitues operating in Bangkok and nearby areas. The data were scraped from an online listing on May 21, 2016 and stored as XML in the ```data``` folder. The raw dataset (```big.rds```) contains such features as name, gender, age, price, range of services and locations, physical measurements, view counts, number of pictures, and contacts of all prostitutes (22 features in total). Furthermore, the processed dataset (```features.rds```) augmented such features as location clusters, body measurement ratios, and view counts per day listed, as well as transformed some features such as location and range of services for machine learning purposes (58 features in total). This report explains the process.
+
+#Necessary Libraries
+```{r,warning=FALSE,message=FALSE}
+library(magrittr) #for %>%
+library(rvest) #for scraping
+library(RCurl) #for url.exists
+library(XML) #for reading and writing xml
+library(plyr) #for data operations
+library(ggplot2) #for plotting
+library(stringr) #for substringing
+library(data.table) #for data tables
+library(tidyr) #for data transformation
+library(ggmap) #for lat-lon conversion
+library(cluster) #for location clustering
+library(lubridate) #for dates
+library(leaflet) #for mapping
+print('hello')
+```
+
+#Scraping
+We scraped all prostitutes listed on the website according to visible IDs. Although it runs from 13 to 10,837, many listings were either missing or removed, perhaps unsurprisingly due to the nature of the industry. This resulted in 865 listings stored as XML in ```data```.
+
+```{r, eval=FALSE}
+#May 21, 2016
+#All visible id
+run_id <- 13:10837
+
+#Profile url
+profile_url <- 'https://69sideline.com/%E0%B9%84%E0%B8%8B%E0%B8%94%E0%B9%8C%E0%B9%84%E0%B8%A5%E0%B8%99%E0%B9%8C'
+
+for(i in run_id){
+    url_to_read <-paste0(profile_url,i)
+    #Check if exist
+    if(url.exists(url_to_read)){
+        temp_xml <-tryCatch({url_to_read %>% read_html() %>% html_nodes(xpath='//*[@id="block-system-main"]/div')},
+        error=function(e) { cat(paste0('In error handler\n',i)); print(e); NULL})
+        temp_xml <- xmlParse(temp_xml[[1]])
+        saveXML(temp_xml,paste0('data/',i,'.xml'))
+    }
+}
+```
+
+#Extracting the Raw Dataset
+We first construct a function to read the details of the listing page using xpath. Error handling is set in case of missing data.
+
+```{r, eval=FALSE}
+#Read curry function
+read_curry <- function(file_name){
+    id <- gsub('.xml|data/','',file_name)
+    main <- file_name %>% read_xml()
+    name <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-name field-type-text field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    gender <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-sex field-type-list-text field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    age <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-age field-type-list-integer field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text() %>%
+        as.numeric()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    do <- tryCatch({main %>%
+        xml_nodes(xpath='//*[@class="field field-name-field-service field-type-taxonomy-term-reference field-label-inline clearfix"]/div[2]/div') %>%
+        xml_text() %>% str_trim()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    location <- tryCatch({main %>%
+        xml_nodes(xpath='//*[@class="field field-name-field-location field-type-taxonomy-term-reference field-label-inline clearfix"]/div[2]/div') %>%
+        xml_text() %>% str_trim()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    room <- tryCatch({main %>%
+        xml_nodes(xpath='//*[@class="field field-name-field-field-type field-type-taxonomy-term-reference field-label-inline clearfix"]/div[2]/div') %>%
+        xml_text() %>% str_trim()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    price <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-price-first field-type-number-integer field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    price <- gsub('บาท','',price) %>%
+        as.numeric()
+    breast <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-shape-boobs field-type-list-integer field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text() %>%
+        as.numeric()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    waist <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-shape-waist field-type-list-integer field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text() %>%
+        as.numeric()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    hip <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-shape-ass field-type-list-integer field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text() %>%
+        as.numeric()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    height <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-shape-height field-type-list-integer field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text() %>%
+        as.numeric()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    weight <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-shape-weight field-type-list-integer field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text() %>%
+        as.numeric()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    pic <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-photo field-type-image field-label-hidden"]') %>%
+        xml_nodes('a') %>%
+        xml_attr('href')},error=function(e) { cat('In error handler\n'); print(e); NA})
+    pic_count <- length(pic)
+    pic_url <- list(pic)
+    tel <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-contact-tel field-type-telephone field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    line <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-contact-line field-type-text field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    email <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="field field-name-field-contact-email field-type-email field-label-inline clearfix"]/div[2]/div')  %>%
+        xml_text() %>% str_trim()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    views <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="statistics_counter last"]')  %>%
+        xml_text()},error=function(e) { cat('In error handler\n'); print(e); NA})
+    views <- gsub('reads','',views) %>%
+        as.numeric()
+    submit <- tryCatch({main %>%
+        xml_node(xpath='//*[@class="submitted"]')  %>%
+        xml_text() %>%
+        str_sub(start=-18) %>%
+        format(format='%d/%m/%Y - %H:%M')},error=function(e) { cat('In error handler\n'); print(e); NA})
+        
+    #Putting it together
+    result <- data.table(id=id,name=name,
+        gender=gender,age=age,do=list(do),location=list(location),
+        room=list(room),price=price,
+        breast=breast,waist=waist,hip=hip,height=height,weight=weight,
+        pic_count = pic_count, pic_url=pic_url,
+        tel=tel,line=line,email=email,views=views,submit=submit)
+    return(result)
+}
+```
+
+We run the function through all XML files, then filter out entries where the most important attributes namely name, LINE contact and price are missing. This helps us screen out empty listings, narrowing down from 865 to 693 valid entries. The raw data set is saved to ```big.rds```.
+
+```{r, eval=FALSE}
+all_files <- list.files(path='data',pattern='*.xml',full.names=TRUE)
+
+#big data table to store the raw data
+big<-data.table()
+
+#loop the function through all XML files
+for(i in all_files){
+    big<-rbind(big,read_curry(i))
+}
+
+#filter out blank pages; name, line and price are most important attributes
+big<-big[!(is.na(name)&is.na(line)&is.na(price))]
+
+#save to rds
+saveRDS(big,'processed/big.rds')
+```
+
+The raw dataset contains the following features:
+
+* ```id``` - ID
+* ```name``` - name/alias
+* ```gender``` - gender: female, ladyboy (operated), ladyboy (not operated), butch, and male
+* ```age``` - age
+* ```do``` - range of services
+* ```location``` - operating location
+* ```room``` - room types available for service
+* ```price``` - price in THB
+* ```breast``` - breast size in cm
+* ```waist``` - waist size in cm
+* ```hip``` - hip size in cm
+* ```height``` - height in cm
+* ```weight``` - weight in kg
+* ```pic_count``` - number of pictures listed
+* ```pic_url``` - URL of the first picture listed
+* ```tel``` - telephone number, if any
+* ```line``` - LINE messenger ID, if any
+* ```email``` - email, if any
+* ```submit``` - date listing submitted
+
+#Transforming Features
+##Range of Services
+The range of services or ```do``` feature comes in a list format. We transform each entry of the list into an individual feature with a logical value (i.e. available or not). The ```id_do``` data frame contains such transformation of each prostitute identified by their IDs. This results in 28 new features: 27 for each service and 1 for the number of services a prostitute provides.
+
+```{r}
+big <-readRDS('processed/big.rds')
+#All services
+alldo <- unique(unlist(big$do))
+alldo
+```
+
+```{r,eval=FALSE}
+#Pairing IDs with logical range of services feature
+id_do <- subset(big,select=c('id','do'))
+#Spread the list out as features
+id_do<-id_do %>% unnest(do) %>% spread(do,do)
+#Service only data table
+do_only <- sapply(id_do[,-1],FUN=function(x){!is.na(x)}) %>% as.data.table()
+#Sum up the number of services available for each prostitute
+do_only$total_do <- rowSums(do_only)
+#Translate the feature names
+colnames(do_only)<-c('69','drink','wot','touchboobs','kiss','deepkiss','suckballs','suckboobs',
+                    'cumonbody','cuminmouth','cuminface','takepicture','massageb2b','massagereal',
+                    'massagespa','uniform','backdoor','rawbj','condombj','sex','boobjob','anal',
+                    'acrobatic','cunnilingus','handjob','swing','bath','total_do')
+#Put it together
+id_do <-cbind(id=id_do$id,do_only)
+```
+
+##Location and Location Clusters
+
+In the same manner, we would perform the transformation on the ```location``` feature. However, it would be extremely inefficient and possibly meaningless due to 292 different locations available. Therefore, we performed a k-mean clustering of the locations to obtain useful features.
+
+###Latitude-Longitude Coordinates
+
+In order to do that, we need to determine the all latitude-longitude coordinations using the ```ggmap``` API. The entirely API-filled dataset of coordinations is saved to ```latlon_missing.csv```. Later, missing and mislabeled data are rectified manually using Google Map searches. This includes some duplicate locations such as Rama 9 Garden which exists both in Bangkok and the deep south (we presumed the listing means the one in Bangkok). Locations which were listed as public transportation such as the BTS and MRT are changed to ```NA```. The adjusted dataset is saved to ```latlon_adj.csv```.
+
+```{r}
+#All location
+alllocation <- unique(unlist(big$location))
+alllocation
+```
+
+```{r,eval=FALSE}
+#Get latitude-longitude coordinates
+latlon <- geocode(alllocation)
+latlon <- cbind(alllocation,latlon)
+write.csv(latlon,'processed/latlon_missing.csv')
+
+#Read from the adjusted dataset
+latlon<-read.csv('processed/latlon_adj.csv',row.names='alllocation')
+```
+
+After that, we bound the locations to only those in Bangkok. This will result in ```NA``` entries replacing the out-of-Bangkok locations. Among our locations, Bang Khun Tien is southernmost; Rangsit-Nakhonnayok is the northernmost; Thakam is the westernmost; and Thanyaburi is the easternmost. The resulting dataset is saved to ```latlon_bkk.csv```.
+
+```{r,eval=FALSE}
+#Screen out non-bangkok locations
+#lat 13.5070897 (Bang Khun Tien), 14.0861947 (Rangsit-Nakhon Nayok)
+#lon 100.1191136 (Tha Kham), 100.8273123 (Thanyaburi)
+bkk_logic <- latlon$lat>13.5070897 & latlon$lat<14.0861947 & 
+                latlon$lon>100.1191136 & latlon$lon<100.8273123 &
+                complete.cases(latlon)
+latlon_bkk<-latlon[bkk_logic,]
+write.csv(latlon_bkk,'processed/latlon_bkk.csv')
+```
+
+###Clustering Locations
+We determine the optimal number of clusters we iterates from 2 to 20 clusters and choose the highest number of clusters where within group sum of squares decreases significantly: 6 (also known as the elbow method).
+
+```{r}
+#Load Bangkok coordinates
+latlon_bkk <- read.csv('processed/latlon_bkk.csv',row.names = 1)
+#Find optimal number of clusters using WSS
+wss <- (nrow(latlon_bkk)-1)*sum(apply(latlon_bkk,2,var))
+  for (i in 2:20) wss[i] <- sum(kmeans(latlon_bkk,
+                                       centers=i)$withinss)
+qplot(x=1:20, y=wss, geom='point', xlab="Number of Clusters",
+     ylab="Within groups sum of squares",main='Elbow Method for Optimal Number of Clusters')
+```
+
+We perform the k-means clustering using 6 centers, and summarize the locations to their respective clusters in ```cl_lookup```. Then we join it to ```big``` using ```id```.
+
+```{r}
+#Fit k-means with 6 centers
+set.seed(1412)
+fit <- kmeans(latlon_bkk,6)
+latlon_bkk$loc_cluster <- fit$cluster
+latlon_bkk$location <- rownames(latlon_bkk)
+
+#Make cluster lookup table
+cl_lookup <-data.frame(loc_cluster=1:6)
+cl_lookup$location <- sapply(cl_lookup$loc_cluster,
+                        FUN=function(x){latlon_bkk[latlon_bkk$loc_cluster==x,]$location})
+                        
+#Incorporate clusters to big
+cl_assign <- function(x){
+    result=character()
+    for (i in 1:6){
+        if (any(x %in% cl_lookup[i,]$location[[1]])){
+            result<-c(result,paste0('cl',i))
+        }
+    }
+    return(result)
+}
+
+big$loc_cluster <- sapply(big$location,cl_assign)
+```
+
+The location clusters are shown below. We named them loosely according to their corresponding areas: Kaset-Ratchayothin,Ladprao-Ramkamhaeng,Donmuang-Rangsit,Thonburi,Sukhumvit,Downtown.
+
+```{r}
+#Mapping
+mapper <- data.frame(location=unlist(big$location))
+mapper<-join(mapper,latlon_bkk)
+mapper<-mapper[complete.cases(mapper),]
+
+colnames(mapper)<-c('location','LONGITUDE','LATITUDE','loc_cluster')
+
+pal <- colorFactor(c('#F36645','#FFC65D','#7CC8A4','#4DC4DA','#94648E','#404040'), domain = 1:6)
+l<-leaflet(mapper) %>%
+    #Set bound
+    fitBounds(~min(mapper$LONGITUDE), ~min(mapper$LATITUDE), 
+              ~max(mapper$LONGITUDE), ~max(mapper$LATITUDE)) %>%
+    addProviderTiles("CartoDB.Positron") %>%
+    addCircleMarkers(popup =mapper$location,stroke=FALSE,color=~pal(mapper$loc_cluster),
+    radius=4,fillOpacity =0.5) %>%
+    addLegend(position = 'topright', 
+    colors = c('#F36645','#FFC65D','#7CC8A4','#4DC4DA','#94648E','#404040'), 
+    labels = c('Kaset-Ratchayothin','Ladprao-Ramkamhaeng','Donmuang-Rangsit','Thonburi','Sukhumvit','Downtown'), opacity = 0.4,
+                      title = 'Location clusters')
+l
+```
+
+Now we can finally perform the same transformation from list items to features such as we have done with range of services. The ```id_loc_cluster``` data frame contains such transformation of each prostitute identified by their IDs. This results in 7 new features: 6 for each cluster and 1 for the number of clusters a prostitute belongs to.
+
+```{r,eval=FALSE}
+#
+id_loc_cluster <- subset(big,select=c('id','loc_cluster'))
+id_loc_cluster<-id_loc_cluster %>% unnest(loc_cluster) %>% spread(loc_cluster,loc_cluster)
+loc_cluster_only <- sapply(id_loc_cluster[,-1],FUN=function(x){!is.na(x)}) %>% as.data.table()
+loc_cluster_only$total_loc_cluster <- rowSums(loc_cluster_only)
+id_loc_cluster <-cbind(id=id_loc_cluster$id,loc_cluster_only)
+```
+
+##Room Types
+The last list-items-to-features transformation is for room types. The ```id_room``` data frame contains such transformation of each prostitute identified by their IDs. This results in 6 new features: 5 for each room type and 1 for the number of room types available for each prostitute.
+```{r,eval=FALSE}
+#id with room
+id_room <- subset(big,select=c('id','room'))
+id_room<-id_room %>% unnest(room) %>% spread(room,room)
+room_only <- sapply(id_room[,-1],FUN=function(x){!is.na(x)}) %>% as.data.table()
+room_only$total_room <- rowSums(room_only)
+colnames(room_only)<-c('car','hotel','guest_room','curry_room','outdoor','total_room')
+id_room <-cbind(id=id_room$id,room_only)
+```
+
+#Making the Feature Space
+
+The feature space consists of the following features:
+
+* ID
+* Gender
+* Age
+* Range of service
+* Location clusters
+* Room types
+* Height, weight and BMI
+* Breast, waist, and hip measurements as well as breast-waist and hip-waist ratios
+* Picture count; number of pictures included in the listing
+* Telephone number (exists or not)
+* LINE instant messenger (exists or not)
+* Email (exists or not)
+* Views per day listed; indicates the amount of attention a prostitute gets, used as proxy for revenue
+* Price
+
+```{r,eval=FALSE}
+#Create feature space
+features<-data.table(id=big$id)
+
+#Gender
+#Translate to English
+features$gender <- big$gender
+features$gender <- gsub('หญิงแท้','female',features$gender)
+features$gender <- gsub('สาวสองผ่าแล้ว','ladyboy_op',features$gender)
+features$gender <- gsub('สาวสองยังไม่ผ่า','ladyboy_notop',features$gender)
+features$gender <- gsub('ทอม','butch',features$gender)
+features$gender <- gsub('ชายแท้','male',features$gender)
+
+#Age
+features$age <- big$age
+
+#Range of service
+features<-join(features,id_do)
+
+#Location clusters
+features<-join(features,id_loc_cluster)
+
+#Room types
+features<-join(features,id_room)
+
+#Height, weight and BMI
+features$height <- big$height
+features$weight <- big$weight
+features$bmi <- features$weight/(features$height/100)^2
+
+#Breast, waist, and hip measurements as well as breast-waist and hip-waist ratios
+features$breast <- big$breast
+features$waist <- big$waist
+features$hip <- big$hip
+features$bw <- features$breast/features$waist
+features$hw <- features$hip/features$waist
+
+#Picture count
+features$pic_count <- big$pic_count
+
+#Tel, line, email
+features$tel <- !is.na(big$tel)
+features$line <- !is.na(big$line)
+features$email <- !is.na(big$email)
+
+#Day listed since May 21, 2016
+big$td <- sapply(big$submit, function(x){as.numeric(dmy('21-5-2016')-dmy(substr(x,1,10)))})
+#Views per day listed
+features$vpd <- big$views/big$td
+
+#Price
+features$price<- big$price
+
+#save features
+saveRDS(features,'processed/features.rds')
+```
+
+

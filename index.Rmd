@@ -1,0 +1,369 @@
+---
+title: "The Data-Driven Guide to Bangkok Prostitutes"
+author: "Charin Polpanumas"
+date: "June 29, 2559 BE"
+output:
+  html_document:
+    toc: true
+---
+
+The world’s oldest profession is--perhaps ironically--the least quantitatively understood. Partly due to the culturally objectionable nature of the industry (Buddhists comprise of more than 90% of Thailand’s population), most studies focus on its qualitative, socio-economic impact. Even the number of sex workers in the country varies greatly among studies from as few as 70,000 to as many as 2 million prostitutes. Buyers and sellers seem to be operating organically without any formal market intelligence, until now at least. As with most industry, prostitution has found its way to the Internet. By web scraping data from an undisclosed online prostitution house, we created a dataset of 693 prostitutes from Bangkok including their price, age, physical characteristics, service repertoire, location and contacts. Here’s what we learn.
+
+---
+
+#The Six Districts of Prostitution
+
+Bangkok prostitutes' areas of operation can be roughly divided into 6 (k-mean) clusters; namely Kaset-Ratchayothin, Ladprao-Ramkamhaeng, Donmuang-Rangsit, Thonburi, Sukhumvit, and Downtown. Some do walk multiple streets and have a larger coverage, but they usually stay in one cluster. The map below shows the pick-up spots within each area. For local customers, Kaset-Ratchayothin (163 spots) and Ladprao-Ramkamhaeng (507 spots) are the household names for prostitution as shown by the density of pick-up spots. Likewise for foreigners, Downtown (213 spots) and Sukhumvit (166 spots) have the honor. Donmuang-Rangsit (121 spots) and Thonburi (82 spots) are relatively less populated, although for the former, university campuses in the area might be driving the supply upward.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#Load data frames
+big <- readRDS('processed/big.rds')
+latlon_bkk <- read.csv('processed/latlon_bkk_cluster.csv')
+
+#Mapping
+library(plyr) #for join
+mapper <- data.frame(location=unlist(big$location))
+mapper<-join(mapper,latlon_bkk)
+mapper<-mapper[complete.cases(mapper),]
+
+library(magrittr) #for >%>
+library(leaflet) #for map
+
+colnames(mapper)<-c('location','LONGITUDE','LATITUDE','loc_cluster')
+
+pal <- colorFactor(c('#F36645','#FFC65D','#7CC8A4','#4DC4DA','#94648E','#404040'), domain = 1:6)
+
+#get vertices of each outlines
+outline1 <- mapper[mapper$loc_cluster==1,]
+outline2 <- mapper[mapper$loc_cluster==2,]
+outline3 <- mapper[mapper$loc_cluster==3,]
+outline4 <- mapper[mapper$loc_cluster==4,]
+outline5 <- mapper[mapper$loc_cluster==5,]
+outline6 <- mapper[mapper$loc_cluster==6,]
+
+l<-leaflet(mapper, width=880, height=300) %>%
+    #Set bound
+    fitBounds(~min(mapper$LONGITUDE), ~min(mapper$LATITUDE), 
+              ~max(mapper$LONGITUDE), ~max(mapper$LATITUDE)) %>%
+    #Set map
+    addProviderTiles("CartoDB.Positron") 
+
+l1<-l %>%
+    #Add area polygons
+    #cluster1
+    addPolygons(data=outline1[chull(outline1$LONGITUDE,outline1$LATITUDE),], lng = ~LONGITUDE, lat = ~LATITUDE,
+    fill = T, fillOpacity = 0.2, color = "#F36645", group = "Outline",stroke=F) %>%
+    #cluster2
+    addPolygons(data=outline2[chull(outline2$LONGITUDE,outline2$LATITUDE),], lng = ~LONGITUDE, lat = ~LATITUDE,
+    fill = T, fillOpacity = 0.2, color = "#FFC65D", group = "Outline",stroke=F) %>%
+    #cluster3
+    addPolygons(data=outline3[chull(outline3$LONGITUDE,outline3$LATITUDE),], lng = ~LONGITUDE, lat = ~LATITUDE,
+    fill = T, fillOpacity = 0.2, color = "#7CC8A4", group = "Outline",stroke=F) %>%
+    #cluster4
+    addPolygons(data=outline4[chull(outline4$LONGITUDE,outline4$LATITUDE),], lng = ~LONGITUDE, lat = ~LATITUDE,
+    fill = T, fillOpacity = 0.2, color = "#4DC4DA", group = "Outline",stroke=F) %>%
+    #cluster5
+    addPolygons(data=outline5[chull(outline5$LONGITUDE,outline5$LATITUDE),], lng = ~LONGITUDE, lat = ~LATITUDE,
+    fill = T, fillOpacity = 0.2, color = "#94648E", group = "Outline",stroke=F) %>%
+    #cluster6
+    addPolygons(data=outline6[chull(outline6$LONGITUDE,outline6$LATITUDE),], lng = ~LONGITUDE, lat = ~LATITUDE,
+    fill = T, fillOpacity = 0.2, color = "#404040", group = "Outline",stroke=F)
+
+l1 <- l1 %>% addCircleMarkers(popup =mapper$location,stroke=FALSE,color=~pal(mapper$loc_cluster),
+    radius=2,fillOpacity =0.5, group='Pickup Spots') %>%
+    addLegend(position = 'topright', 
+    colors = c('#F36645','#FFC65D','#7CC8A4','#4DC4DA','#94648E','#404040'), 
+    labels = c('Kaset-Ratchayothin','Ladprao-Ramkamhaeng','Donmuang-Rangsit','Thonburi','Sukhumvit','Downtown'), opacity = 0.4, title = 'Location clusters') %>%
+    #LayerControl
+    addLayersControl(
+    overlayGroups = c('Pickup Spots','Outline'),
+    options = layersControlOptions(collapsed = TRUE))
+l1
+```
+
+#Looks By The Numbers
+##Breast-Waist-Hip
+In the spirit of full disclosure, this quantitative analysis will inevitably be without one of the most important factors that describe a prostitute--*beauty*. The most reliable way to quantify such a subjective matter as beauty is to have a number of people rate all prostitutes using the pictures they have posted (only 281 out of 693 have pictures posted, by the way) and average them. We do not have the manpower to do so thus we rely on a different approach: their measurements.
+
+A typical prostitute in Bangkok measures 35-27-36. The stature seems to hold across location clusters; that is, given that prostitutes are totally honest about their physical appearances. According to [science and evolution](http://linkinghub.elsevier.com/retrieve/pii/S1090513809000889?via=sd), the hip-to-waist (or waist-to-hip) ratio is a signifiant determinant of attractiveness. [A study](https://www.researchgate.net/publication/263268689_Watching_the_Hourglass_Eye_Tracking_Reveals_Men%27s_Appreciation_of_the_Female_Form) cited 1.4 as the optimal ratio. In that regards, Ladprao-Ramkamhaeng wins hands down with Kaset-Ratchayothin, Sukhumvit and Downtown all having decent records. 
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+library(tidyr) #for data wrangling
+#load features
+features<-readRDS('processed/features.rds')
+#Spread features across location clusters
+area_big <- gather(subset(features,select=c('cl1','cl2','cl3','cl4','cl5','cl6','id')), loc_cluster,id,-id)
+colnames(area_big)<-c('id','loc_cluster','val')
+#Get only complete cases
+area_big <- subset(area_big[complete.cases(area_big) & area_big$val,],select=-val)
+#Join with big
+area_big <- join(area_big,big)
+
+#BWH subset
+bwh <- subset(area_big,select=c('breast','waist','hip','loc_cluster'))
+#Average measurements
+colMeans(bwh[,c('breast','waist','hip')],na.rm = TRUE)
+
+#Add breast-waist and hip-waist ratios
+bwh$bw <- bwh$breast/bwh$waist
+bwh$hw <- bwh$hip/bwh$waist
+
+#violins
+library(ggplot2)
+#Manual color palette
+color_pal <- c('#F36645','#FFC65D','#7CC8A4','#4DC4DA','#94648E','#404040')
+#Manual location cluster acronyms
+cl_acro <- c('KR','LR','DR','TB','SK','DT')
+#hw
+g <- ggplot(data=bwh,aes(x=loc_cluster,y=hw,fill=loc_cluster))
+g <- g+geom_violin()+ scale_fill_manual(values=color_pal)
+g <- g + xlab('Location Clusters') + ylab('Hip-to-Waist Ratio')+ theme(legend.position="none")
+g <- g + scale_x_discrete(labels=cl_acro) +scale_y_reverse()
+g
+```
+
+If we would not-so-scientifically apply the same rule of thump to breast-to-waist ratio, Downtown would win the curviness contest. However, if you are willing to lower the bar a little, Kaset-Ratchayothin, Ladprao-Ramkamhaeng and even the less popular Donmuang-Rangsit would also have quite a number of busty prostitutes.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#bw
+g <- ggplot(data=bwh,aes(x=loc_cluster,y=bw,fill=loc_cluster))
+g <- g+geom_violin()+ scale_fill_manual(values=color_pal)
+g <- g + xlab('Location Clusters') + ylab('Breast-to-Waist Ratio')+ theme(legend.position="none")
+g <- g + scale_x_discrete(labels=cl_acro)
+g
+```
+
+##BMI
+
+Although the body mass index (BMI) has taken a lot of statistical beatings in terms of [its validity in predicting one's health](http://fivethirtyeight.com/features/bmi-is-a-terrible-measure-of-health/), it is still indicative of a body type. An average Bangkok prostitute weighs 55 kilograms and stands 163 centimeters. Prostitutes are significantly more underweight and less obese than [the general population](https://knoema.com/WHOGDOBMIMay/who-global-database-on-body-mass-index-bmi?country=1002140-thailand). About a third is underweight compared to a tenth in the general population and about a tenth is overweight or obese compared to about a third in the general population. They have approximately the same percentage of population with normal weight, although is it noteworthy that roughly 15% of prostitutes in our sample did not specify their weight and height.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#BMI subset
+bmi <- subset(area_big,select=c('weight','height','loc_cluster'))
+#Average weight and height
+colMeans(bmi[,c('weight','height')],na.rm = TRUE)
+
+#Add bmi
+bmi$bmi <- bmi$weight/(bmi$height/100)^2
+bmi$bodytype <- sapply(bmi$bmi, function(x) ifelse(x<18.5,'underweight',
+                                            ifelse(x>=18.5 & x <25,'normal',
+                                            ifelse(x>=25 & x<30,'overweight','obese'))))
+bmi$bodytype <- factor(bmi$bodytype,levels=c('underweight','normal','overweight','obese'))
+bmi$bodytype_loc_cluster <- paste(bmi$bodytype,bmi$loc_cluster,sep='_')
+
+#plot pie chart for overall
+g <- ggplot(data=bmi,aes(x=factor(""),fill=bodytype))
+g <- g+geom_bar(width=1,aes(y=(..count..)/sum(..count..))) + coord_polar(theta='y')
+g <- g+scale_fill_discrete(name='Body Types')+theme(panel.grid  = element_blank()) +xlab('')+ylab('')
+g <- g+scale_y_continuous(labels=scales::percent,breaks=0:100/20) 
+g
+```
+
+Among the location clusters, Donmuang-Rangsit and Thonburi stand out as the relatively more *chubby* clusters, whereas Downtown appears to be the *skinniest*. The rest have almost the same composition as the overall prostitute population.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#compare between clusters
+#aggregate body types + location clusters
+agg_bmi<-aggregate(bodytype~bodytype_loc_cluster,bmi,length)
+colnames(agg_bmi) <-c('bodytype_loc_cluster','count')
+agg_bmi$bodytype <- sapply(agg_bmi$bodytype_loc_cluster,function(x) strsplit(x,split='_')[[1]][1])
+agg_bmi$loc_cluster <- sapply(agg_bmi$bodytype_loc_cluster,function(x) strsplit(x,split='_')[[1]][2])
+
+#aggregate location clusters
+agg_bmi2 <- aggregate(bodytype~loc_cluster,bmi,length)
+colnames(agg_bmi2) <-c('loc_cluster','total_count')
+
+#join them
+agg_bmi <- join(agg_bmi,agg_bmi2)
+agg_bmi$bodytype <- factor(agg_bmi$bodytype,levels=c('underweight','normal','overweight','obese'))
+agg_bmi$per <- round((agg_bmi$count/agg_bmi$total_count)*100,1)
+
+#plot bar chart for each cluster
+g <- ggplot(data=agg_bmi,aes(x=factor(""),y=per,fill=bodytype))
+g <- g+geom_bar(width=1,stat='identity')  +coord_polar(theta='y')
+g <- g+scale_fill_discrete(name='Body Types')+theme(panel.grid  = element_blank(),axis.text = element_blank(),axis.ticks = element_blank())+xlab('')+ylab('')
+
+#loc_cluster labeling
+d_labels <- c('Kaset-Ratchayothin','Ladprao-Ramkamhaeng','Donmuang-Rangsit','Thonburi','Sukhumvit','Downtown')
+loc_cluster_labeller <- function (variable,value){
+    return(d_labels[as.integer(substr(value,3,3))])
+}
+
+g+ facet_grid(facets=. ~ loc_cluster,labeller = loc_cluster_labeller) 
+```
+
+## Age
+Even though some people age differently than others. We cannot deny that age plays an important role in dictating physical appearances. The median age for Thai prostitutes is 23 years old. The youngest start as early as 18 years old, the legal age for consensual sex (not that it matters because prostitution is technically illegal in Thailand anyways); the oldest age is 45 years old.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#Barplot
+g <- ggplot(data=area_big,aes(x=age,fill=loc_cluster))
+g <- g+geom_bar()+ scale_fill_manual(values=color_pal,name = "Location Clusters",
+labels = d_labels)
+g <- g + xlab('Age') + ylab('Number of Prostitutes')
+g
+
+```
+
+#But What Can They Do
+We explore the most popular services provided and unsurprisingly such basic activities as sex, blowjob, woman-on-top, and groping come out on top, whereas more *fetish-ish* activities like drinking the semen, taking pictures, anal and swinging stay at the bottom. Despite some minor variations, popularity rankings of services tend to remain the same across location clusters.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#Get only services
+do_list <- c('69','drink','wot','touchboobs','kiss','deepkiss','suckballs','suckboobs',
+                    'cumonbody','cuminmouth','cuminface','takepicture','massageb2b','massagereal',
+                    'massagespa','uniform','backdoor','rawbj','condombj','sex','boobjob','anal',
+                    'acrobatic','cunnilingus','handjob','swing','bath')
+#join loc_cluster to features
+x <- join(features,area_big,by='id')
+#create a temp for each loc_cluster
+#x1
+x1<-x[x$loc_cluster=='cl1',]
+do_only <-x1[,do_list]
+x1_score <- as.data.frame(colSums(do_only,na.rm=TRUE))
+colnames(x1_score)<-'count'
+x1_score$deeds <- rownames(x1_score)
+x1_score$loc_cluster <- 'cl1'
+
+#x2
+x2<-x[x$loc_cluster=='cl2',]
+do_only <-x2[,do_list]
+x2_score <- as.data.frame(colSums(do_only,na.rm=TRUE))
+colnames(x2_score)<-'count'
+x2_score$deeds <- rownames(x2_score)
+x2_score$loc_cluster <- 'cl2'
+
+#x3
+x3<-x[x$loc_cluster=='cl3',]
+do_only <-x3[,do_list]
+x3_score <- as.data.frame(colSums(do_only,na.rm=TRUE))
+colnames(x3_score)<-'count'
+x3_score$deeds <- rownames(x3_score)
+x3_score$loc_cluster <- 'cl3'
+
+#x4
+x4<-x[x$loc_cluster=='cl4',]
+do_only <-x4[,do_list]
+x4_score <- as.data.frame(colSums(do_only,na.rm=TRUE))
+colnames(x4_score)<-'count'
+x4_score$deeds <- rownames(x4_score)
+x4_score$loc_cluster <- 'cl4'
+
+#x5
+x5<-x[x$loc_cluster=='cl5',]
+do_only <-x5[,do_list]
+x5_score <- as.data.frame(colSums(do_only,na.rm=TRUE))
+colnames(x5_score)<-'count'
+x5_score$deeds <- rownames(x5_score)
+x5_score$loc_cluster <- 'cl5'
+
+#x6
+x6<-x[x$loc_cluster=='cl6',]
+do_only <-x6[,do_list]
+x6_score <- as.data.frame(colSums(do_only,na.rm=TRUE))
+colnames(x6_score)<-'count'
+x6_score$deeds <- rownames(x6_score)
+x6_score$loc_cluster <- 'cl6'
+
+#bind them together
+do_score<-rbind(x1_score,x2_score,x3_score,x4_score,x5_score,x6_score)
+
+#Barplot
+g <- ggplot(do_score,aes(x=reorder(deeds,-count),y=count,fill=loc_cluster))
+g <- g+geom_bar(stat='identity')+ scale_fill_manual(values=color_pal,name = "Clusters",
+labels = cl_acro)
+g <- g + xlab('Services') + ylab('Number of Prostitutes') + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+g
+
+```
+
+When we look at the number of prostitutes performing each service, Ladprao-Ramkamhaeng's dominace as a prostitution hot spot truly shines. For any service, Ladprao-Ramkamhaeng has the largest number of prostitutes performing it. Downtown comes in close second while Kaset-Ratchayothin and Donmuang-Rangsit trail behind. 
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#plot tiles
+g<-ggplot(do_score, aes(x=loc_cluster,y=deeds)) + geom_raster(aes(fill=count),interpolate=FALSE)
+g<-g+labs(x='Location Clusters',y='Services') + scale_fill_continuous(name='Frequency')
+g<-g+theme(axis.text.x = element_text(angle = 90, hjust = 1)) + scale_x_discrete(labels=cl_acro)
+g
+```
+
+#It's About The Money, Money, Money
+
+##Location Clusters
+
+Bangkok prostitutes of all clusters charge a standard (median) price of around 1,500THB (about 40USD) per deed. Notable exceptions include the suburban Donmuang-Rangsit area whose upper quantile is substantially lower than the rest; this coincides with the area's lower average income. On the other hand, the Downtown area has the widest range of prices, possibly to cater to a variety of customers.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+
+library(ggplot2)
+#Box plot
+g <- ggplot(data=area_big, aes(x=loc_cluster, y=price,fill=loc_cluster))
+g <- g+geom_boxplot() + scale_fill_manual(values=color_pal)
+g <- g + xlab('Location Clusters') + ylab('Price (THB)')+ theme(legend.position="none")
+g <- g + scale_x_discrete(labels=cl_acro)
+#Add mean points
+g<- g+stat_summary(fun.y=mean, colour="white", geom="point", shape=18, size=3,show.legend = FALSE)
+g
+```
+
+##Gender Diversity
+
+Another interesting dimension is the price discrimination according to gender. Thailand is one of the world's most socially, though regrettably not legally, open places to gender diversity. Yet, be it demand-supply equilibrium or blatant homophobia, gay prostitutes seem to be making a lot than their straight counterparts. Ladyboy prostitutes who have undergone sex change operations can charge closer to the female ones (82 cents for a dollar on average); the same cannot be said for those who have not (60 cents for a dollar on average). Butches are excluded due to small sample size. Straight male also, perhaps more understandably, earn 70 cents on average for each dollar straight female earn.
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#Boxplot
+g <- ggplot(data=area_big[area_big$gender!='ทอม',], aes(x=gender, y=price,fill=gender))
+g <- g+geom_boxplot() + scale_fill_manual(values=color_pal)
+g <- g + xlab('Gender') + ylab('Price (THB)')+ theme(legend.position="none")
+g <- g + scale_x_discrete(labels=c('Male','Ladyboy Op','Ladyboy Not Op','Female'))
+#Add mean points
+g<- g+stat_summary(fun.y=mean, colour="white", geom="point", shape=18, size=3,show.legend = FALSE)
+g
+```
+
+#LINE is King
+Over 70% of the communication in the Bangkok prostitution industry is done through the instant messaging app LINE. Telephone number accounts for 60% of the contacts provided. And believe it or not, 10% of the prostitutes also list their email addresses.
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+contact <- features[,c('tel','line','email')]
+contact<- as.data.frame(colSums(contact,na.rm = TRUE))
+colnames(contact)<-'count'
+contact$method <- rownames(contact)
+
+#plot bar chart
+g <- ggplot(data=contact,aes(x=method,y=count,fill=method))
+g <- g+geom_bar(width=1,stat='identity') 
+g <- g+scale_fill_discrete(name='Contact')+xlab('')+ylab('')
+g
+```
+
+# Core Competencies
+Prostitution in Bangkok is a cut-throat business. 50% of prostitutes gets less than 40 views on their profiles per day, and 90% of them gets less than 300 views per day. This means that 10% of the super divas makes up of more than 45% of the total views per day.
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#10% gets 45% of the views
+sum(features[features$vpd>=300,]$vpd)/sum(features$vpd)
+#Explore vpd
+g<- ggplot(features,aes(vpd))+geom_area(stat='bin')
+g <- g+xlab('Views per day listed')+ylab('Number of Prostitutes')
+g
+```
+
+In order to dig deeper into the dynamics of the industry, we performed gradient boosted regression and computed the relative influences of each feature. Since we lack some of the most important features such as *beauty*, our model ends up explaining only around 10% of the variations. Nonetheless, it is worth looking at the 21 features with a significant level of relative influences. 
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE,cache=TRUE}
+library(caret)
+set.seed(1412)
+features<-subset(features,select=-c(id))
+fit <- train(vpd~.,features,method='gbm')
+fit
+var_imp <- as.data.frame(varImp(fit$finalModel))
+var_imp$feature <- rownames(var_imp)
+all_num<-sum(var_imp$Overall)
+var_imp$rel.inf <- var_imp$Overall/all_num
+var_imp<-arrange(var_imp,-rel.inf)
+g <- ggplot(var_imp[1:20,],aes(x=reorder(feature,rel.inf),y=rel.inf))
+g<-g+geom_bar(stat='identity') +coord_flip() 
+g<-g+xlab('Features')+ylab('Relative Influence')
+g 
+```
+
+Aside from such obvious determinants as price and pictures, the ideal Bangkok prostitute--the one with the most likely highest views per day--is a young, physically fit and appealing straight female who operates in Kaset-Ratchayothin but also travels around. The larger her repertoire the better; at least it should include 69, cum on body, boob job, actual Thai massage, cunnilingus and the woman-on-top position. As for the customers, Ladprao-Ramkamhaeng, Downtown and Kaset-Ratchayothin are the areas with the most populated, most physically fit and most curvy prostitutes. Ladprao-Ramkamhaeng offers the highest variety. Donmuang-Rangsit offers the cheapest deals. And everyone most likely uses LINE for communication.
