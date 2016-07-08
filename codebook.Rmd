@@ -37,7 +37,7 @@ We scraped all prostitutes listed on the website according to visible IDs. Altho
 run_id <- 13:10837
 
 #Profile url
-profile_url <- 'https://69sideline.com/%E0%B9%84%E0%B8%8B%E0%B8%94%E0%B9%8C%E0%B9%84%E0%B8%A5%E0%B8%99%E0%B9%8C'
+profile_url <- 'CENSORED'
 
 for(i in run_id){
     url_to_read <-paste0(profile_url,i)
